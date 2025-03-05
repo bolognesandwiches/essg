@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    
+    /* User color variables */
+    --color-red-500: #ef4444;
+    --color-blue-500: #3b82f6;
+    --color-green-500: #22c55e;
+    --color-purple-500: #a855f7;
+    --color-orange-500: #f97316;
+    --color-pink-500: #ec4899;
+    --color-teal-500: #14b8a6;
+    --color-indigo-500: #6366f1;
+    --color-yellow-500: #eab308;
+    --color-cyan-500: #06b6d4;
+    
+    /* Default color */
+    --color-primary-500: #0ea5e9;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .container-narrow {
+    @apply mx-auto max-w-3xl px-4 sm:px-6 lg:px-8;
+  }
+  
+  .container-wide {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+  
+  .btn-primary {
+    @apply rounded-md bg-primary-600 px-4 py-2 text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+  
+  .btn-secondary {
+    @apply rounded-md bg-white px-4 py-2 text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2;
+  }
+  
+  .card {
+    @apply rounded-lg bg-white p-6 shadow-md;
+  }
+} 
