@@ -4,13 +4,31 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/lib/store'
-import { api, SocialTrend } from '@/lib/api'
+import { api } from '@/lib/api'
+
+// Define types for social trends
+interface SocialTrend {
+  id: string
+  name: string
+  query: string
+  tweet_volume: number
+  source: string
+  url?: string
+}
+
+// Define types for API query arguments
+interface TrendsQueryArgs {
+  source: string
+  location?: string
+}
 
 export default function TrendsPage() {
   const router = useRouter()
   const { userLocation } = useSelector((state: RootState) => state.spaces)
   const [selectedSource, setSelectedSource] = useState('twitter')
   const [locationCode, setLocationCode] = useState<string | undefined>(undefined)
+  const [debugInfo, setDebugInfo] = useState<string>('')
+  const [isTestingConnection, setIsTestingConnection] = useState(false)
   
   // Fetch trends based on selected source and location
   const { 
@@ -21,6 +39,18 @@ export default function TrendsPage() {
   } = api.useGetSocialTrendsQuery({
     source: selectedSource,
     location: locationCode
+  }, {
+    // Log the response for debugging
+    onQueryStarted: async (arg: TrendsQueryArgs, { queryFulfilled }: { queryFulfilled: Promise<any> }) => {
+      try {
+        const { data } = await queryFulfilled
+        console.log('Trends data received:', data)
+        setDebugInfo('')
+      } catch (error) {
+        console.error('Error fetching trends:', error)
+        setDebugInfo(JSON.stringify(error, null, 2))
+      }
+    }
   })
   
   // Create space from trend
@@ -57,6 +87,72 @@ export default function TrendsPage() {
     { id: 'mastodon', name: 'Mastodon', disabled: true },
   ]
   
+  const handleRetry = () => {
+    console.log('Retrying fetch...')
+    setDebugInfo('Retrying...')
+    refetchTrends()
+  }
+  
+  // Function to test the debug endpoint
+  const testDebugEndpoint = async () => {
+    setIsTestingConnection(true)
+    try {
+      console.log('Testing Twitter API connection...')
+      const response = await fetch('http://localhost:8080/api/social/debug')
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      console.log('Debug endpoint response:', data)
+      
+      // Format the debug info nicely
+      let formattedDebugInfo = `Status Code: ${data.status_code}\n\n`
+      
+      // Add response body if it exists
+      if (data.body) {
+        try {
+          // Try to parse the body as JSON for better formatting
+          const bodyJson = JSON.parse(data.body)
+          formattedDebugInfo += `Body: ${JSON.stringify(bodyJson, null, 2)}`
+        } catch (e) {
+          // If parsing fails, just use the string
+          formattedDebugInfo += `Body: ${data.body}`
+        }
+      }
+      
+      setDebugInfo(formattedDebugInfo)
+    } catch (error) {
+      console.error('Error testing debug endpoint:', error)
+      setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsTestingConnection(false)
+    }
+  }
+  
+  // Function to directly test the trends endpoint
+  const testTrendsEndpoint = async () => {
+    setIsTestingConnection(true)
+    try {
+      console.log('Testing trends endpoint directly...')
+      const response = await fetch('http://localhost:8080/api/social/trends?source=twitter')
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      console.log('Trends endpoint response:', data)
+      setDebugInfo(JSON.stringify(data, null, 2))
+    } catch (error) {
+      console.error('Error testing trends endpoint:', error)
+      setDebugInfo(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsTestingConnection(false)
+    }
+  }
+  
   return (
     <div className="container-wide py-12">
       <div className="mb-8">
@@ -91,6 +187,24 @@ export default function TrendsPage() {
         </div>
       </div>
       
+      {/* Debug buttons */}
+      <div className="mb-4 flex space-x-4">
+        <button
+          onClick={testDebugEndpoint}
+          disabled={isTestingConnection}
+          className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+        >
+          {isTestingConnection ? 'Testing...' : 'Test Twitter API Connection'}
+        </button>
+        <button
+          onClick={testTrendsEndpoint}
+          disabled={isTestingConnection}
+          className="rounded-md bg-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+        >
+          {isTestingConnection ? 'Testing...' : 'Test Trends Endpoint Directly'}
+        </button>
+      </div>
+      
       {/* Trends list */}
       {trendsLoading ? (
         <div className="space-y-4">
@@ -104,29 +218,51 @@ export default function TrendsPage() {
         </div>
       ) : trendsError ? (
         <div className="rounded-md bg-red-50 p-4">
-          <div className="flex">
+          <div className="flex flex-col">
             <div className="text-sm text-red-700">
               <p>Unable to load trends. Please try again later.</p>
               <button 
-                onClick={() => refetchTrends()} 
+                onClick={handleRetry} 
                 className="mt-2 font-medium text-red-700 hover:text-red-600"
               >
                 Retry
               </button>
             </div>
+            {debugInfo && (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-red-700">Debug Info:</p>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-red-100 p-2 text-xs text-red-800">
+                  {debugInfo}
+                </pre>
+              </div>
+            )}
           </div>
         </div>
       ) : !socialTrends || socialTrends.length === 0 ? (
         <div className="rounded-md bg-blue-50 p-4">
-          <div className="flex">
+          <div className="flex flex-col">
             <div className="text-sm text-blue-700">
               <p>No trends available at the moment. Please try again later or select a different source.</p>
+              <button 
+                onClick={handleRetry} 
+                className="mt-2 font-medium text-blue-700 hover:text-blue-600"
+              >
+                Retry
+              </button>
             </div>
+            {debugInfo && (
+              <div className="mt-4">
+                <p className="text-xs font-medium text-blue-700">Debug Info:</p>
+                <pre className="mt-1 max-h-40 overflow-auto rounded bg-blue-100 p-2 text-xs text-blue-800">
+                  {debugInfo}
+                </pre>
+              </div>
+            )}
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          {socialTrends.map((trend) => (
+          {socialTrends.map((trend: SocialTrend) => (
             <div key={trend.id} className="rounded-lg bg-white p-6 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
@@ -137,25 +273,13 @@ export default function TrendsPage() {
                     </p>
                   )}
                 </div>
-                <div className="flex items-center space-x-4">
-                  {trend.url && (
-                    <a
-                      href={trend.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-medium text-gray-500 hover:text-gray-700"
-                    >
-                      View on {trend.source === 'twitter' ? 'Twitter/X' : trend.source}
-                    </a>
-                  )}
-                  <button
-                    onClick={() => handleCreateSpace(trend)}
-                    disabled={isCreating}
-                    className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-                  >
-                    {isCreating ? 'Creating...' : 'Create Space'}
-                  </button>
-                </div>
+                <button
+                  onClick={() => handleCreateSpace(trend)}
+                  disabled={isCreating}
+                  className="rounded-md bg-primary-500 px-4 py-2 text-sm font-medium text-white hover:bg-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50"
+                >
+                  {isCreating ? 'Creating...' : 'Create Space'}
+                </button>
               </div>
             </div>
           ))}

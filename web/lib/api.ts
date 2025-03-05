@@ -44,7 +44,7 @@ export interface SocialTrend {
   id: string
   name: string
   query: string
-  tweet_volume: number | null
+  tweet_volume: number
   source: string
   url?: string
 }
@@ -120,16 +120,22 @@ export const api = createApi({
     }),
     
     // Social Media Trends endpoints
-    getSocialTrends: builder.query<SocialTrend[], { source?: string; location?: string }>({
-      query: ({ source = 'twitter', location }) => 
-        `social/trends?source=${source}${location ? `&location=${location}` : ''}`,
+    getSocialTrends: builder.query<SocialTrend[], { source: string, location?: string }>({
+      query: ({ source, location }) => ({
+        url: `/social/trends`,
+        params: { source, location },
+      }),
       providesTags: ['SocialTrends'],
+      transformErrorResponse: (response, meta, arg) => {
+        console.error('Error fetching social trends:', response)
+        return response
+      },
     }),
-    createSpaceFromTrend: builder.mutation<Space, { trendId: string; source: string }>({
-      query: ({ trendId, source }) => ({
-        url: 'spaces/from-trend',
+    createSpaceFromTrend: builder.mutation<Space, { trendId: string, source: string }>({
+      query: (body) => ({
+        url: '/spaces',
         method: 'POST',
-        body: { trendId, source },
+        body,
       }),
       invalidatesTags: ['Spaces', 'Trends'],
     }),
@@ -141,11 +147,24 @@ export const api = createApi({
     }),
     sendMessage: builder.mutation<Message, { spaceId: string; content: string }>({
       query: ({ spaceId, content }) => ({
-        url: `spaces/${spaceId}/messages`,
+        url: `/spaces/${spaceId}/messages`,
         method: 'POST',
         body: { content },
       }),
       invalidatesTags: (result, error, { spaceId }) => [{ type: 'Messages', id: spaceId }],
     }),
   }),
-}) 
+})
+
+// Export hooks for usage in components
+export const {
+  useGetSocialTrendsQuery,
+  useCreateSpaceFromTrendMutation,
+  useGetSpaceByIdQuery,
+  useGetJoinedSpacesQuery,
+  useGetTrendingSpacesQuery,
+  useGetNearbySpacesQuery,
+  useGetSpaceMessagesQuery,
+  useSendMessageMutation,
+  useLeaveSpaceMutation,
+} = api 

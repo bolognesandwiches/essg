@@ -9,9 +9,11 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/nats-io/nats.go v1.39.1
+	github.com/rs/cors v1.11.1
 )
 
 require (
+	github.com/g8rswimmer/go-twitter/v2 v2.1.5
 	github.com/gorilla/mux v1.8.1
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.3 // indirect
