@@ -5,7 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/bolognesandwiches/essg/server/services/social"
+	"essg/server/services/social"
+
 	"github.com/gorilla/mux"
 )
 

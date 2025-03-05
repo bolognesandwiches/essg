@@ -6,8 +6,61 @@ import (
 	"net/http"
 	"time"
 
+	"essg/server/models"
+	"essg/server/services"
+
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 )
+
+// SpaceHandler handles requests related to spaces
+type SpaceHandler struct {
+	spaceService *services.SpaceService
+}
+
+// NewSpaceHandler creates a new space handler
+func NewSpaceHandler(spaceService *services.SpaceService) *SpaceHandler {
+	return &SpaceHandler{
+		spaceService: spaceService,
+	}
+}
+
+// RegisterRoutes registers the space API routes
+func (h *SpaceHandler) RegisterRoutes(r *mux.Router) {
+	r.HandleFunc("/api/spaces/trending", h.GetTrendingSpaces).Methods("GET")
+	r.HandleFunc("/api/spaces/nearby", h.GetNearbySpaces).Methods("GET")
+	r.HandleFunc("/api/spaces/{id}", h.GetSpaceById).Methods("GET")
+	r.HandleFunc("/api/spaces/joined", h.GetJoinedSpaces).Methods("GET")
+	// Add more routes as needed
+}
+
+// GetTrendingSpaces handles requests to get trending spaces
+func (h *SpaceHandler) GetTrendingSpaces(w http.ResponseWriter, r *http.Request) {
+	// Implementation will go here
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode([]models.Space{})
+}
+
+// GetNearbySpaces handles requests to get nearby spaces
+func (h *SpaceHandler) GetNearbySpaces(w http.ResponseWriter, r *http.Request) {
+	// Implementation will go here
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode([]models.Space{})
+}
+
+// GetSpaceById handles requests to get a space by ID
+func (h *SpaceHandler) GetSpaceById(w http.ResponseWriter, r *http.Request) {
+	// Implementation will go here
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(models.Space{})
+}
+
+// GetJoinedSpaces handles requests to get spaces joined by a user
+func (h *SpaceHandler) GetJoinedSpaces(w http.ResponseWriter, r *http.Request) {
+	// Implementation will go here
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode([]models.Space{})
+}
 
 // CreateSpaceFromTrendRequest represents the request to create a space from a trend
 type CreateSpaceFromTrendRequest struct {
