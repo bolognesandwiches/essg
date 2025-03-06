@@ -12,6 +12,8 @@ require (
 	github.com/rs/cors v1.11.1
 )
 
+require github.com/dghubble/oauth1 v0.7.3 // indirect
+
 require (
 	github.com/g8rswimmer/go-twitter/v2 v2.1.5
 	github.com/gorilla/mux v1.8.1

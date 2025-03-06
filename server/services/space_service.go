@@ -191,3 +191,54 @@ func isNearby(lat1, lng1, lat2, lng2, radius float64) bool {
 
 	return distanceKm <= radius
 }
+
+// GetSpaceByTrend retrieves a space by its trend source and name
+func (s *SpaceService) GetSpaceByTrend(source, trendName string) (*models.Space, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	for _, space := range s.spaces {
+		// Check if this space was created for this trend
+		if space.Title == trendName && len(space.TopicTags) > 0 {
+			// Check if one of the tags matches the source
+			for _, tag := range space.TopicTags {
+				if tag == source {
+					return space, nil
+				}
+			}
+		}
+	}
+
+	return nil, errors.New("space not found for this trend")
+}
+
+// IncrementMessageCount increments the message count for a space
+func (s *SpaceService) IncrementMessageCount(spaceID string) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	space, exists := s.spaces[spaceID]
+	if !exists {
+		return errors.New("space not found")
+	}
+
+	space.MessageCount++
+	space.LastActive = time.Now()
+
+	return nil
+}
+
+// UpdateLastActive updates the last active time for a space
+func (s *SpaceService) UpdateLastActive(spaceID string) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	space, exists := s.spaces[spaceID]
+	if !exists {
+		return errors.New("space not found")
+	}
+
+	space.LastActive = time.Now()
+
+	return nil
+}

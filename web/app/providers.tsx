@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { Provider } from 'react-redux'
 import { store } from '@/lib/store'
 import { webSocketService } from '@/lib/websocket'
+import { ThemeProvider } from '@/components/ThemeProvider'
 
 // Component to initialize WebSocket connection
 function WebSocketInitializer() {
@@ -23,8 +24,10 @@ function WebSocketInitializer() {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <Provider store={store}>
-      <WebSocketInitializer />
-      {children}
+      <ThemeProvider>
+        <WebSocketInitializer />
+        {children}
+      </ThemeProvider>
     </Provider>
   )
 } 

@@ -3,11 +3,44 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { useDispatch, useSelector } from 'react-redux'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, parseISO } from 'date-fns'
 import { api, Message } from '@/lib/api'
 import { setActiveSpace, joinSpace } from '@/lib/features/spaces/spacesSlice'
 import { RootState } from '@/lib/store'
 import { useWebSocket, TypingIndicator } from '@/lib/websocket'
+
+// Helper function to safely format dates
+const safeFormatDate = (dateString: string | undefined) => {
+  if (!dateString) return 'N/A';
+  
+  try {
+    // Check if the input is a string or already a Date object
+    const date = typeof dateString === 'string' 
+      ? parseISO(dateString) 
+      : dateString;
+    
+    // Check if the date is valid
+    if (date instanceof Date && isNaN(date.getTime())) {
+      console.error('Invalid date:', dateString);
+      return 'N/A';
+    }
+    
+    // Special handling for dates that are too far in the past or future
+    const now = new Date();
+    const dateObj = date instanceof Date ? date : new Date(date);
+    
+    // Check if date is more than 100 years in the past or future (likely an error)
+    if (Math.abs(now.getFullYear() - dateObj.getFullYear()) > 100) {
+      console.error('Date appears to be too far in the past/future:', dateString);
+      return 'just now'; // Default to something reasonable
+    }
+    
+    return formatDistanceToNow(dateObj, { addSuffix: true });
+  } catch (error) {
+    console.error('Error parsing date:', error, dateString);
+    return 'N/A';
+  }
+}
 
 export default function SpaceDetailPage() {
   const params = useParams()
@@ -32,6 +65,9 @@ export default function SpaceDetailPage() {
   })
   
   const [sendMessage, { isLoading: isSending }] = api.useSendMessageMutation()
+  
+  const [messageInput, setMessageInput] = useState('')
+  const [replyTo, setReplyTo] = useState<{ id: string, userName: string, content: string } | null>(null)
   
   // Set active space and connect to WebSocket
   useEffect(() => {
@@ -101,30 +137,66 @@ export default function SpaceDetailPage() {
     webSocket.joinSpace(spaceId)
   }
   
-  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    const form = e.currentTarget
-    const formData = new FormData(form)
-    const content = formData.get('message') as string
+    if (!user?.id || !spaceId) return
     
-    if (content.trim() && spaceId) {
-      // Clear typing indicator
-      if (isTyping) {
-        setIsTyping(false)
-        webSocket.sendStopTypingIndicator(spaceId)
-      }
+    const form = e.target as HTMLFormElement
+    const formData = new FormData(form)
+    const message = formData.get('message') as string
+    
+    if (!message.trim()) return
+    
+    try {
+      await sendMessage({
+        spaceId,
+        content: message,
+        replyToId: replyTo?.id,
+        replyToUserName: replyTo?.userName
+      }).unwrap()
       
-      // Send message via API
-      try {
-        const result = await sendMessage({ spaceId, content }).unwrap()
-        
-        // Optimistically add message to local state
-        // The WebSocket will deliver the official message to all clients
-        form.reset()
-      } catch (error) {
-        console.error('Failed to send message:', error)
+      // Clear the form and reply state
+      form.reset()
+      setMessageInput('')
+      setReplyTo(null)
+      
+      // Stop typing indicator
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+        typingTimeoutRef.current = null
       }
+      setIsTyping(false)
+      webSocket.sendTypingIndicator(spaceId)
+      
+      // Scroll to bottom
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    } catch (error) {
+      console.error('Failed to send message:', error)
     }
+  }
+  
+  const handleReply = (message: Message) => {
+    // Truncate the message content if it's too long
+    const truncatedContent = message.content.length > 50 
+      ? message.content.substring(0, 50) + '...' 
+      : message.content;
+      
+    setReplyTo({
+      id: message.id,
+      userName: message.userName,
+      content: truncatedContent
+    })
+    // Focus the input
+    const inputEl = document.querySelector('input[name="message"]') as HTMLInputElement
+    if (inputEl) {
+      inputEl.focus()
+    }
+  }
+  
+  const cancelReply = () => {
+    setReplyTo(null)
   }
   
   const handleTyping = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -193,19 +265,34 @@ export default function SpaceDetailPage() {
         </div>
         <p className="mt-2 text-gray-600">{space.description}</p>
         
+        {space.trendName && space.trendName !== space.title && (
+          <p className="mt-2 text-sm text-primary-600 font-medium">
+            Trending topic: {space.trendName}
+          </p>
+        )}
+        
         <div className="mt-4 flex flex-wrap gap-2">
-          {space.topicTags.map((tag: string) => (
-            <span key={tag} className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-              {tag}
+          {space.topicTags && space.topicTags.length > 0 ? (
+            space.topicTags.map((tag: string) => (
+              <span key={tag} className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                {tag}
+              </span>
+            ))
+          ) : (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+              General Discussion
             </span>
-          ))}
+          )}
         </div>
         
         <div className="mt-4 flex items-center gap-4 text-sm text-gray-500">
-          <span>{space.userCount} participants</span>
-          <span>{space.messageCount} messages</span>
-          <span>Created {formatDistanceToNow(new Date(space.createdAt), { addSuffix: true })}</span>
-          <span>Last active {formatDistanceToNow(new Date(space.lastActive), { addSuffix: true })}</span>
+          <span>{space.userCount || 0} participants</span>
+          <span>{space.messageCount || 0} messages</span>
+          <span>Created {safeFormatDate(space.createdAt)}</span>
+          <span>Last active {safeFormatDate(space.lastActive)}</span>
+          {space.expiresAt && (
+            <span>Expires {safeFormatDate(space.expiresAt)}</span>
+          )}
         </div>
       </div>
       
@@ -239,26 +326,45 @@ export default function SpaceDetailPage() {
                   <div className="space-y-4">
                     {localMessages.map((message: Message) => (
                       <div 
-                        key={message.id} 
-                        className={`rounded-lg p-3 shadow-sm ${
+                        key={message.id}
+                        className={`relative rounded-lg p-4 shadow-sm mb-4 ${
                           message.userId === user?.id ? 'ml-8 bg-primary-50' : 'mr-8 bg-white'
                         }`}
                       >
+                        {message.replyToUserName && (
+                          <div className="text-xs text-gray-500 mb-1 flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1 rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                            Replying to <span className="font-medium">{message.replyToUserName}</span>
+                          </div>
+                        )}
+                        
                         <div className="flex items-center gap-2">
                           <div 
                             className="h-8 w-8 rounded-full flex items-center justify-center text-white"
                             style={{ backgroundColor: message.userColor ? `var(--color-${message.userColor}-500)` : 'var(--color-primary-500)' }}
                           >
                             <span className="text-sm font-medium">
-                              {message.userName.charAt(0).toUpperCase()}
+                              {(message.userName || 'User').charAt(0).toUpperCase()}
                             </span>
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{message.userName}</p>
+                            <p className="text-sm font-medium text-gray-900">{message.userName || 'Anonymous User'}</p>
                             <p className="text-xs text-gray-500">
-                              {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}
+                              {safeFormatDate(message.createdAt)}
                             </p>
                           </div>
+                          
+                          <button
+                            onClick={() => handleReply(message)}
+                            className="ml-auto text-xs text-gray-500 hover:text-primary-600"
+                            title="Reply to this message"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                            </svg>
+                          </button>
                         </div>
                         <p className="mt-2 text-gray-700">{message.content}</p>
                       </div>
@@ -282,6 +388,26 @@ export default function SpaceDetailPage() {
               )}
               
               <form onSubmit={handleSendMessage}>
+                {replyTo && (
+                  <div className="mb-2 flex items-center bg-gray-50 p-2 rounded-md">
+                    <div className="flex flex-col text-xs">
+                      <span className="text-gray-600">
+                        Replying to <span className="font-medium">{replyTo.userName}</span>
+                      </span>
+                      <span className="text-gray-500 italic mt-1">{replyTo.content}</span>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={cancelReply}
+                      className="ml-auto text-xs text-gray-500 hover:text-red-600"
+                      title="Cancel reply"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -289,7 +415,11 @@ export default function SpaceDetailPage() {
                     placeholder="Type your message..."
                     className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary-600 sm:text-sm sm:leading-6"
                     required
-                    onChange={handleTyping}
+                    value={messageInput}
+                    onChange={(e) => {
+                      setMessageInput(e.target.value)
+                      handleTyping(e)
+                    }}
                   />
                   <button
                     type="submit"
@@ -310,7 +440,7 @@ export default function SpaceDetailPage() {
               <div className="space-y-4">
                 <div>
                   <h3 className="text-sm font-medium text-gray-500">Template Type</h3>
-                  <p className="mt-1 text-sm text-gray-900 capitalize">{space.templateType.replace('_', ' ')}</p>
+                  <p className="mt-1 text-sm text-gray-900 capitalize">{(space.templateType || 'standard').replace('_', ' ')}</p>
                 </div>
                 
                 {space.isGeoLocal && space.location && (
@@ -341,7 +471,7 @@ export default function SpaceDetailPage() {
                   <div>
                     <h3 className="text-sm font-medium text-gray-500">Expires</h3>
                     <p className="mt-1 text-sm text-gray-900">
-                      {formatDistanceToNow(new Date(space.expiresAt), { addSuffix: true })}
+                      {safeFormatDate(space.expiresAt)}
                     </p>
                   </div>
                 )}

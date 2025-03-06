@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -29,8 +29,12 @@ func NewSpaceHandler(spaceService *services.SpaceService) *SpaceHandler {
 func (h *SpaceHandler) RegisterRoutes(r *mux.Router) {
 	r.HandleFunc("/api/spaces/trending", h.GetTrendingSpaces).Methods("GET")
 	r.HandleFunc("/api/spaces/nearby", h.GetNearbySpaces).Methods("GET")
-	r.HandleFunc("/api/spaces/{id}", h.GetSpaceById).Methods("GET")
 	r.HandleFunc("/api/spaces/joined", h.GetJoinedSpaces).Methods("GET")
+	r.HandleFunc("/api/spaces/check-exists", h.CheckSpaceExists).Methods("GET")
+	r.HandleFunc("/api/spaces/{id}", h.GetSpaceById).Methods("GET")
+	r.HandleFunc("/api/spaces/{id}/join", h.JoinSpace).Methods("POST")
+	r.HandleFunc("/api/spaces/{id}/leave", h.LeaveSpace).Methods("POST")
+	r.HandleFunc("/api/spaces", h.CreateSpace).Methods("POST")
 	// Add more routes as needed
 }
 
@@ -50,96 +54,210 @@ func (h *SpaceHandler) GetNearbySpaces(w http.ResponseWriter, r *http.Request) {
 
 // GetSpaceById handles requests to get a space by ID
 func (h *SpaceHandler) GetSpaceById(w http.ResponseWriter, r *http.Request) {
-	// Implementation will go here
+	vars := mux.Vars(r)
+	spaceID := vars["id"]
+
+	space, err := h.spaceService.GetSpaceByID(spaceID)
+	if err != nil {
+		http.Error(w, "Failed to get space: "+err.Error(), http.StatusNotFound)
+		return
+	}
+
+	fmt.Printf("Retrieved space with ID %s, created at %s, last active %s\n",
+		space.ID,
+		space.CreatedAt.Format(time.RFC3339),
+		space.LastActive.Format(time.RFC3339))
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(models.Space{})
+	json.NewEncoder(w).Encode(space)
 }
 
 // GetJoinedSpaces handles requests to get spaces joined by a user
 func (h *SpaceHandler) GetJoinedSpaces(w http.ResponseWriter, r *http.Request) {
-	// Implementation will go here
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode([]models.Space{})
-}
-
-// CreateSpaceFromTrendRequest represents the request to create a space from a trend
-type CreateSpaceFromTrendRequest struct {
-	TrendID string `json:"trendId"`
-	Source  string `json:"source"`
-}
-
-// CreateSpaceFromTrend handles requests to create a new space based on a social media trend
-func (h *SpaceHandler) CreateSpaceFromTrend(w http.ResponseWriter, r *http.Request) {
-	// Get anonymous user ID from header
+	// Get user ID from headers
 	userID := r.Header.Get("x-anonymous-user-id")
 	if userID == "" {
 		http.Error(w, "Anonymous user ID required", http.StatusBadRequest)
 		return
 	}
 
+	fmt.Printf("Getting joined spaces for user: %s\n", userID)
+
+	// Get spaces joined by the user
+	spaces, err := h.spaceService.GetJoinedSpaces(userID)
+	if err != nil {
+		http.Error(w, "Failed to get joined spaces: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Printf("Found %d joined spaces for user %s\n", len(spaces), userID)
+
+	// Return the spaces
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(spaces)
+}
+
+// CreateSpaceRequest represents the request body for creating a space
+type CreateSpaceRequest struct {
+	TrendID string `json:"trendId"`
+	Source  string `json:"source"`
+}
+
+// JoinSpace handles requests to join a space
+func (h *SpaceHandler) JoinSpace(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	spaceID := vars["id"]
+
+	// Get user ID from headers
+	userID := r.Header.Get("x-anonymous-user-id")
+	if userID == "" {
+		http.Error(w, "Anonymous user ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Join the space
+	err := h.spaceService.JoinSpace(spaceID, userID)
+	if err != nil {
+		http.Error(w, "Failed to join space: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "joined"})
+}
+
+// LeaveSpace handles requests to leave a space
+func (h *SpaceHandler) LeaveSpace(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	spaceID := vars["id"]
+
+	// Get user ID from headers
+	userID := r.Header.Get("x-anonymous-user-id")
+	if userID == "" {
+		http.Error(w, "Anonymous user ID required", http.StatusBadRequest)
+		return
+	}
+
+	// Leave the space
+	err := h.spaceService.LeaveSpace(spaceID, userID)
+	if err != nil {
+		http.Error(w, "Failed to leave space: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "left"})
+}
+
+// CreateSpace creates a new space based on a trend
+func (h *SpaceHandler) CreateSpace(w http.ResponseWriter, r *http.Request) {
 	// Parse request body
-	var req CreateSpaceFromTrendRequest
+	var req CreateSpaceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Validate request
-	if req.TrendID == "" {
-		http.Error(w, "Trend ID is required", http.StatusBadRequest)
+	fmt.Printf("Creating space from trend: %s (source: %s)\n", req.TrendID, req.Source)
+
+	// Get user ID from headers (anonymous user)
+	userID := r.Header.Get("x-anonymous-user-id")
+	if userID == "" {
+		// Generate a random ID if user is not identified
+		userID = uuid.New().String()
+	}
+
+	// First, check if a space for this trend already exists
+	existingSpace, err := h.spaceService.GetSpaceByTrend(req.Source, req.TrendID)
+	if err == nil && existingSpace != nil {
+		// Space already exists for this trend, join it instead of creating a new one
+		fmt.Printf("Space already exists for trend '%s' (ID: %s), joining instead\n", req.TrendID, existingSpace.ID)
+
+		// Join the user to the existing space
+		err := h.spaceService.JoinSpace(existingSpace.ID, userID)
+		if err != nil {
+			http.Error(w, "Failed to join existing space: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		// Return the existing space
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK) // Use 200 instead of 201 since we're not creating a new space
+		json.NewEncoder(w).Encode(existingSpace)
 		return
 	}
 
-	// Get trend details from social service
-	// This is a simplified example - in a real implementation,
-	// you would fetch the actual trend details from your social service
-	var trendName string
-	var trendDescription string
-
-	if req.Source == "twitter" {
-		// Fetch trend details from Twitter
-		// This is a placeholder - you would implement this based on your Twitter client
-		trendName = "Twitter Trend #" + req.TrendID
-		trendDescription = "A space for discussing the trending topic on Twitter"
-	} else {
-		http.Error(w, "Unsupported social media source", http.StatusBadRequest)
-		return
-	}
-
-	// Create a new space based on the trend
+	// Create a space based on the trend
 	space := &models.Space{
 		ID:             uuid.New().String(),
-		Title:          trendName,
-		Description:    trendDescription,
+		Title:          req.TrendID, // Use the trend name directly
+		Description:    fmt.Sprintf("A space for discussing the trending topic '%s' from %s", req.TrendID, req.Source),
 		TemplateType:   "social_trend",
-		LifecycleStage: "growing",
+		LifecycleStage: "active",
 		CreatedAt:      time.Now(),
 		LastActive:     time.Now(),
-		UserCount:      1, // Start with the creator
+		UserCount:      1,
 		MessageCount:   0,
-		IsGeoLocal:     false, // Social trends are typically not geo-local
-		TopicTags:      []string{req.Source, "trend"},
+		IsGeoLocal:     false,
+		TopicTags:      []string{req.Source, "trend", "social_media"},
+		TrendName:      req.TrendID, // Store the original trend name
 		CreatedBy:      userID,
 	}
 
-	// Add expiration (e.g., 24 hours from now)
+	// Set an expiration time (24 hours from now)
 	expiresAt := time.Now().Add(24 * time.Hour)
 	space.ExpiresAt = &expiresAt
 
+	fmt.Printf("Created space with ID %s and tags: %v\n", space.ID, space.TopicTags)
+
 	// Save the space
-	if err := h.spaceService.CreateSpace(space); err != nil {
+	err = h.spaceService.CreateSpace(space)
+	if err != nil {
 		http.Error(w, "Failed to create space: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	// Auto-join the creator to the space
-	if err := h.spaceService.JoinSpace(space.ID, userID); err != nil {
-		// Log the error but don't fail the request
-		log.Printf("Failed to auto-join creator to space: %v", err)
+	// Join the user to the space
+	err = h.spaceService.JoinSpace(space.ID, userID)
+	if err != nil {
+		http.Error(w, "Failed to join space: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	// Return the created space
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(space)
+}
+
+// CheckSpaceExists checks if a space exists for a specific trend
+func (h *SpaceHandler) CheckSpaceExists(w http.ResponseWriter, r *http.Request) {
+	// Get query parameters
+	trendName := r.URL.Query().Get("trendName")
+	source := r.URL.Query().Get("source")
+
+	if trendName == "" || source == "" {
+		http.Error(w, "trendName and source are required", http.StatusBadRequest)
+		return
+	}
+
+	// Check if space exists
+	existingSpace, err := h.spaceService.GetSpaceByTrend(source, trendName)
+
+	// Prepare response
+	response := struct {
+		Exists  bool   `json:"exists"`
+		SpaceId string `json:"spaceId,omitempty"`
+	}{
+		Exists: err == nil && existingSpace != nil,
+	}
+
+	// Add the space ID if found
+	if existingSpace != nil {
+		response.SpaceId = existingSpace.ID
+	}
+
+	// Return JSON response
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }

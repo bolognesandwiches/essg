@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import { useSelector, useDispatch } from 'react-redux'
 import { RootState } from '@/lib/store'
 import { updateDisplayName, resetUser } from '@/lib/features/user/userSlice'
+import { DarkModeToggle } from './DarkModeToggle'
 
 export function Header() {
   const pathname = usePathname()
@@ -53,22 +54,23 @@ export function Header() {
   ]
   
   return (
-    <header className="bg-white shadow">
+    <header className="bg-white shadow dark:bg-gray-800 dark:shadow-gray-700/10">
       <nav className="mx-auto flex max-w-7xl items-center justify-between p-4 lg:px-8" aria-label="Global">
         <div className="flex lg:flex-1">
           <Link href="/" className="-m-1.5 p-1.5">
             <span className="sr-only">Ephemeral Social Space Generator</span>
             <div className="flex items-center">
               <div className="h-8 w-8 rounded-full bg-gradient-to-r from-primary-500 to-secondary-500"></div>
-              <span className="ml-2 text-xl font-bold text-gray-900">ESSG</span>
+              <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">ESSG</span>
             </div>
           </Link>
         </div>
         
         <div className="flex lg:hidden">
+          <DarkModeToggle />
           <button
             type="button"
-            className="-m-2.5 inline-flex items-center justify-center rounded-md p-2.5 text-gray-700"
+            className="-m-2.5 ml-2 inline-flex items-center justify-center rounded-md p-2.5 text-gray-700 dark:text-gray-300"
             onClick={() => setMobileMenuOpen(true)}
           >
             <span className="sr-only">Open main menu</span>
@@ -84,7 +86,9 @@ export function Header() {
               key={item.name}
               href={item.href}
               className={`text-sm font-semibold ${
-                pathname === item.href ? 'text-primary-600' : 'text-gray-900 hover:text-primary-600'
+                pathname === item.href 
+                  ? 'text-primary-600 dark:text-primary-400' 
+                  : 'text-gray-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400'
               }`}
             >
               {item.name}
@@ -94,8 +98,10 @@ export function Header() {
         
         <div className="hidden lg:flex lg:flex-1 lg:justify-end">
           <div className="flex items-center">
+            <DarkModeToggle />
+            
             {userLocation && (
-              <div className="mr-4 flex items-center text-sm text-gray-600">
+              <div className="ml-4 flex items-center text-sm text-gray-600 dark:text-gray-400">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="mr-1 h-4 w-4">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
@@ -105,7 +111,7 @@ export function Header() {
             )}
             
             {isEditingName ? (
-              <div className="flex items-center">
+              <div className="flex items-center ml-4">
                 <input
                   ref={inputRef}
                   type="text"
@@ -113,7 +119,7 @@ export function Header() {
                   onChange={(e) => setDisplayName(e.target.value)}
                   onKeyDown={handleKeyDown}
                   onBlur={handleSaveName}
-                  className="mr-2 w-40 rounded-md border-gray-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="mr-2 w-40 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500"
                   maxLength={20}
                 />
                 <button
@@ -124,7 +130,7 @@ export function Header() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center">
+              <div className="flex items-center ml-4">
                 <button 
                   onClick={() => setIsEditingName(true)}
                   className="flex items-center"
@@ -134,14 +140,14 @@ export function Header() {
                       {user?.displayName.charAt(0).toUpperCase()}
                     </div>
                   </div>
-                  <span className="ml-2 text-sm font-medium text-gray-900">{user?.displayName}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="ml-1 h-4 w-4 text-gray-500">
+                  <span className="ml-2 text-sm font-medium text-gray-900 dark:text-white">{user?.displayName}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="ml-1 h-4 w-4 text-gray-500 dark:text-gray-400">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                   </svg>
                 </button>
                 <button
                   onClick={() => dispatch(resetUser())}
-                  className="ml-4 text-xs text-gray-500 hover:text-gray-700"
+                  className="ml-4 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                   title="Reset your anonymous identity"
                 >
                   Reset
@@ -156,18 +162,18 @@ export function Header() {
       {mobileMenuOpen && (
         <div className="lg:hidden">
           <div className="fixed inset-0 z-50" onClick={() => setMobileMenuOpen(false)}></div>
-          <div className="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-white px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-gray-900/10">
+          <div className="fixed inset-y-0 right-0 z-50 w-full overflow-y-auto bg-white dark:bg-gray-800 px-6 py-6 sm:max-w-sm sm:ring-1 sm:ring-gray-900/10 dark:sm:ring-gray-100/10">
             <div className="flex items-center justify-between">
               <Link href="/" className="-m-1.5 p-1.5" onClick={() => setMobileMenuOpen(false)}>
                 <span className="sr-only">Ephemeral Social Space Generator</span>
                 <div className="flex items-center">
                   <div className="h-8 w-8 rounded-full bg-gradient-to-r from-primary-500 to-secondary-500"></div>
-                  <span className="ml-2 text-xl font-bold text-gray-900">ESSG</span>
+                  <span className="ml-2 text-xl font-bold text-gray-900 dark:text-white">ESSG</span>
                 </div>
               </Link>
               <button
                 type="button"
-                className="-m-2.5 rounded-md p-2.5 text-gray-700"
+                className="-m-2.5 rounded-md p-2.5 text-gray-700 dark:text-gray-300"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <span className="sr-only">Close menu</span>
@@ -177,14 +183,16 @@ export function Header() {
               </button>
             </div>
             <div className="mt-6 flow-root">
-              <div className="-my-6 divide-y divide-gray-500/10">
+              <div className="-my-6 divide-y divide-gray-500/10 dark:divide-gray-700">
                 <div className="space-y-2 py-6">
                   {navigation.map((item) => (
                     <Link
                       key={item.name}
                       href={item.href}
                       className={`-mx-3 block rounded-lg px-3 py-2 text-base font-semibold leading-7 ${
-                        pathname === item.href ? 'text-primary-600' : 'text-gray-900 hover:bg-gray-50'
+                        pathname === item.href 
+                          ? 'text-primary-600 dark:text-primary-400' 
+                          : 'text-gray-900 dark:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
                       }`}
                       onClick={() => setMobileMenuOpen(false)}
                     >
@@ -199,7 +207,7 @@ export function Header() {
                         {user?.displayName.charAt(0).toUpperCase()}
                       </div>
                     </div>
-                    <span className="ml-2 text-sm font-medium text-gray-900">{user?.displayName}</span>
+                    <span className="ml-2 text-sm font-medium text-gray-900 dark:text-white">{user?.displayName}</span>
                   </div>
                   
                   <div className="flex items-center">
@@ -208,7 +216,7 @@ export function Header() {
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
                       placeholder="Change display name"
-                      className="mr-2 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                      className="mr-2 w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm shadow-sm focus:border-primary-500 focus:ring-primary-500"
                       maxLength={20}
                     />
                     <button
@@ -228,7 +236,7 @@ export function Header() {
                       dispatch(resetUser())
                       setMobileMenuOpen(false)
                     }}
-                    className="mt-4 -mx-3 block w-full rounded-lg px-3 py-2.5 text-left text-base font-semibold leading-7 text-gray-900 hover:bg-gray-50"
+                    className="mt-4 -mx-3 block w-full rounded-lg px-3 py-2.5 text-left text-base font-semibold leading-7 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     Reset Identity
                   </button>

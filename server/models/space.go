@@ -17,6 +17,7 @@ type Space struct {
 	MessageCount   int        `json:"messageCount"`
 	IsGeoLocal     bool       `json:"isGeoLocal"`
 	TopicTags      []string   `json:"topicTags"`
+	TrendName      string     `json:"trendName,omitempty"`
 	CreatedBy      string     `json:"createdBy,omitempty"`
 	ExpiresAt      *time.Time `json:"expiresAt,omitempty"`
 	Location       *Location  `json:"location,omitempty"`

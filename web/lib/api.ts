@@ -17,6 +17,7 @@ export interface Space {
   messageCount: number
   isGeoLocal: boolean
   topicTags: string[]
+  trendName?: string
   location?: {
     latitude: number
     longitude: number
@@ -44,9 +45,14 @@ export interface SocialTrend {
   id: string
   name: string
   query: string
-  tweet_volume: number
+  score: number
+  comments_count: number
   source: string
   url?: string
+  subreddit?: string
+  thumbnail?: string
+  author?: string
+  created?: number
 }
 
 export interface Message {
@@ -57,6 +63,8 @@ export interface Message {
   userColor?: string
   content: string
   createdAt: string
+  replyToId?: string  // ID of the message this is replying to
+  replyToUserName?: string // Username of the message this is replying to
 }
 
 // Create a custom base query with anonymous user ID
@@ -120,17 +128,55 @@ export const api = createApi({
     }),
     
     // Social Media Trends endpoints
-    getSocialTrends: builder.query<SocialTrend[], { source: string, location?: string }>({
-      query: ({ source, location }) => ({
-        url: `/social/trends`,
-        params: { source, location },
-      }),
+    getSocialTrends: builder.query<SocialTrend[], { source: string, subreddit?: string, location?: string, timeRange?: string, limit?: number }>({
+      query: ({ source, subreddit, location, timeRange, limit }) => {
+        // Build query parameters
+        const params: Record<string, string> = { source };
+        if (subreddit) params.subreddit = subreddit;
+        if (location) params.location = location;
+        if (timeRange) params.timeRange = timeRange;
+        if (limit) params.limit = String(limit);
+        
+        return {
+          url: `/social/trends`,
+          params,
+        };
+      },
       providesTags: ['SocialTrends'],
+      // Handle both regular responses and responses with mock data due to API limitations
+      transformResponse: (response: any) => {
+        console.log('Transforming social trends response:', response);
+        
+        // Check if response has error structure with mock data
+        if (response && response.error && response.data) {
+          console.warn(`Twitter API issue: ${response.error} - ${response.message}`);
+          return response.data;
+        }
+        
+        // Regular response
+        return response;
+      },
       transformErrorResponse: (response, meta, arg) => {
         console.error('Error fetching social trends:', response)
         return response
       },
     }),
+    
+    // Add the missing getAvailableLocations endpoint
+    getAvailableLocations: builder.query<any[], { source: string, limit?: number }>({
+      query: ({ source, limit }) => {
+        // Build query parameters
+        const params: Record<string, string> = { source };
+        if (limit) params.limit = String(limit);
+        
+        return {
+          url: `/social/locations`,
+          params,
+        };
+      },
+      providesTags: ['SocialTrends'],
+    }),
+    
     createSpaceFromTrend: builder.mutation<Space, { trendId: string, source: string }>({
       query: (body) => ({
         url: '/spaces',
@@ -140,16 +186,27 @@ export const api = createApi({
       invalidatesTags: ['Spaces', 'Trends'],
     }),
     
+    // Add an endpoint to check if a space exists for a trend
+    checkSpaceExistsForTrend: builder.query<{ exists: boolean, spaceId?: string }, { trendName: string, source: string }>({
+      query: ({ trendName, source }) => 
+        `/spaces/check-exists?trendName=${encodeURIComponent(trendName)}&source=${encodeURIComponent(source)}`,
+    }),
+    
     // Messages endpoints
     getSpaceMessages: builder.query<Message[], string>({
       query: (spaceId) => `spaces/${spaceId}/messages`,
       providesTags: (result, error, spaceId) => [{ type: 'Messages', id: spaceId }],
     }),
-    sendMessage: builder.mutation<Message, { spaceId: string; content: string }>({
-      query: ({ spaceId, content }) => ({
+    sendMessage: builder.mutation<Message, { 
+      spaceId: string; 
+      content: string; 
+      replyToId?: string;
+      replyToUserName?: string;
+    }>({
+      query: ({ spaceId, content, replyToId, replyToUserName }) => ({
         url: `/spaces/${spaceId}/messages`,
         method: 'POST',
-        body: { content },
+        body: { content, replyToId, replyToUserName },
       }),
       invalidatesTags: (result, error, { spaceId }) => [{ type: 'Messages', id: spaceId }],
     }),
@@ -159,12 +216,15 @@ export const api = createApi({
 // Export hooks for usage in components
 export const {
   useGetSocialTrendsQuery,
+  useGetAvailableLocationsQuery,
   useCreateSpaceFromTrendMutation,
-  useGetSpaceByIdQuery,
+  useCheckSpaceExistsForTrendQuery,
+  useGetSpaceQuery,
+  useGetSpacesQuery,
   useGetJoinedSpacesQuery,
-  useGetTrendingSpacesQuery,
   useGetNearbySpacesQuery,
-  useGetSpaceMessagesQuery,
-  useSendMessageMutation,
+  useJoinSpaceMutation,
   useLeaveSpaceMutation,
+  useGetMessagesQuery,
+  useSendMessageMutation,
 } = api 

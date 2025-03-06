@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"essg/server/services"
@@ -12,12 +13,14 @@ import (
 // MessageHandler handles requests related to messages
 type MessageHandler struct {
 	messageService *services.MessageService
+	spaceService   *services.SpaceService
 }
 
 // NewMessageHandler creates a new message handler
-func NewMessageHandler(messageService *services.MessageService) *MessageHandler {
+func NewMessageHandler(messageService *services.MessageService, spaceService *services.SpaceService) *MessageHandler {
 	return &MessageHandler{
 		messageService: messageService,
+		spaceService:   spaceService,
 	}
 }
 
@@ -44,7 +47,9 @@ func (h *MessageHandler) GetMessages(w http.ResponseWriter, r *http.Request) {
 
 // CreateMessageRequest represents the request to create a message
 type CreateMessageRequest struct {
-	Content string `json:"content"`
+	Content         string `json:"content"`
+	ReplyToID       string `json:"replyToId,omitempty"`
+	ReplyToUserName string `json:"replyToUserName,omitempty"`
 }
 
 // CreateMessage handles requests to create a new message in a space
@@ -76,10 +81,16 @@ func (h *MessageHandler) CreateMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create the message
-	message, err := h.messageService.CreateMessage(spaceID, userID, userName, userColor, req.Content)
+	message, err := h.messageService.CreateMessage(spaceID, userID, userName, userColor, req.Content, req.ReplyToID, req.ReplyToUserName)
 	if err != nil {
 		http.Error(w, "Failed to create message: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	// Increment message count for the space
+	if err := h.spaceService.IncrementMessageCount(spaceID); err != nil {
+		// Log the error but don't fail the request
+		fmt.Printf("Failed to increment message count: %v\n", err)
 	}
 
 	// Return the created message

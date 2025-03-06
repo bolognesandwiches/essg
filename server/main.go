@@ -38,7 +38,7 @@ func main() {
 
 	// Initialize handlers
 	spaceHandler := handlers.NewSpaceHandler(spaceService)
-	messageHandler := handlers.NewMessageHandler(messageService)
+	messageHandler := handlers.NewMessageHandler(messageService, spaceService)
 	socialHandler := handlers.NewSocialHandler()
 
 	// Register routes
